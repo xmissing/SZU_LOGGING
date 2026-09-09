@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Virtual env
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Project temp files
+settings.json
+szu_cookies.json
+chrome_data/
+pylibs/
+_pydeps/
+
+# OS
+Thumbs.db
+.DS_Store

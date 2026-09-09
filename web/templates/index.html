@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深圳大学公告监控系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="app">
+        <!-- ===== 顶部导航栏 ===== -->
+        <header class="navbar">
+            <div class="navbar-brand">
+                <span class="brand-icon">📋</span>
+                <div class="brand-text">
+                    <span class="brand-title">深圳大学公告监控系统</span>
+                    <span class="brand-subtitle">SZU Board Monitor · 自动抓取 · 去重存储 · 邮件通知</span>
+                </div>
+            </div>
+            <div class="navbar-actions">
+                <button class="btn btn-ghost" onclick="openDbModal()">⚙️ 数据库配置</button>
+                <button class="btn btn-ghost" onclick="openEmailModal()">📧 邮箱配置</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- ===== 搜索表单 ===== -->
+            <section class="card search-card">
+                <div class="card-header">
+                    <span class="card-title">🔍 公告搜索</span>
+                </div>
+                <div class="card-body">
+                    <!-- 第一行：账号 + 密码 -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>账号 <span class="required">*</span></label>
+                            <input type="text" id="account" class="form-input" placeholder="请输入深大统一认证账号">
+                        </div>
+                        <div class="form-group">
+                            <label>密码 <span class="required">*</span></label>
+                            <input type="password" id="password" class="form-input" placeholder="请输入密码">
+                        </div>
+                    </div>
+
+                    <!-- 第二行：关键词 -->
+                    <div class="form-row">
+                        <div class="form-group form-group-keyword">
+                            <label>搜索关键词 <span class="required">*</span></label>
+                            <input type="text" id="keyword" class="form-input" placeholder="请输入要监控的关键词，如：奖学金、考试">
+                        </div>
+                    </div>
+
+                    <!-- 第三行：时间范围 + 邮件发送模式 + 运行按钮 -->
+                    <div class="form-row form-row-actions">
+                        <div class="form-group">
+                            <label>查询时间范围</label>
+                            <select id="timeRange" class="form-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>邮件发送模式</label>
+                            <select id="emailSendMode" class="form-select" disabled></select>
+                        </div>
+                        <div class="form-group form-group-run">
+                            <button class="btn btn-primary btn-lg" id="runBtn" onclick="runCrawler()">
+                                🚀 运行爬虫
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== 运行日志 ===== -->
+            <section class="card log-card" id="logSection" style="display:none;">
+                <div class="card-header">
+                    <span class="card-title">📝 运行日志</span>
+                    <span class="log-status" id="logStatus">就绪</span>
+                </div>
+                <div class="card-body">
+                    <div class="log-console" id="logConsole"></div>
+                </div>
+            </section>
+
+            <!-- ===== 数据展示 ===== -->
+            <section class="card data-card" id="dataSection" style="display:none;">
+                <div class="card-header">
+                    <span class="card-title">📰 公告列表</span>
+                    <div class="data-summary" id="dataSummary"></div>
+                </div>
+                <div class="card-body">
+                    <!-- Tab 切换 -->
+                    <div class="tabs">
+                        <button class="tab tab-active" data-tab="all" onclick="switchTab('all')">
+                            全部数据 <span class="tab-badge" id="badgeAll">0</span>
+                        </button>
+                        <button class="tab" data-tab="new" onclick="switchTab('new')">
+                            🆕 新数据 <span class="tab-badge tab-badge-new" id="badgeNew">0</span>
+                        </button>
+                        <button class="tab" data-tab="old" onclick="switchTab('old')">
+                            📦 已存数据 <span class="tab-badge tab-badge-old" id="badgeOld">0</span>
+                        </button>
+                    </div>
+
+                    <!-- 表格 -->
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:60px">状态</th>
+                                    <th style="width:130px">ID</th>
+                                    <th>标题</th>
+                                    <th style="width:120px">发布人</th>
+                                    <th style="width:150px">发布时间</th>
+                                    <th style="width:80px">浏览量</th>
+                                    <th style="width:80px">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- 空状态 -->
+                    <div class="empty-state" id="emptyState" style="display:none;">
+                        <span class="empty-icon">📭</span>
+                        <p>暂无数据，请运行爬虫获取公告</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- ===== 数据库配置弹窗 ===== -->
+        <div class="modal-overlay" id="dbModal" onclick="closeModalOnOverlay(event, 'dbModal')">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>⚙️ 数据库配置</h2>
+                    <button class="modal-close" onclick="closeModal('dbModal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="dbEnabled"> 启用数据库存储
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>主机地址</label>
+                            <input type="text" id="dbHost" class="form-input" value="localhost">
+                        </div>
+                        <div class="form-group">
+                            <label>端口</label>
+                            <input type="number" id="dbPort" class="form-input" value="3306">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>用户名</label>
+                            <input type="text" id="dbUser" class="form-input" value="root">
+                        </div>
+                        <div class="form-group">
+                            <label>密码</label>
+                            <input type="password" id="dbPassword" class="form-input" placeholder="数据库密码">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>数据库名</label>
+                        <input type="text" id="dbName" class="form-input" value="szu_board">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" onclick="closeModal('dbModal')">取消</button>
+                    <button class="btn btn-primary" onclick="saveDbConfig()">保存配置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 邮箱配置弹窗 ===== -->
+        <div class="modal-overlay" id="emailModal" onclick="closeModalOnOverlay(event, 'emailModal')">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>📧 邮箱配置</h2>
+                    <button class="modal-close" onclick="closeModal('emailModal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="emailEnabled"> 启用邮件通知
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>发件人邮箱</label>
+                        <input type="email" id="senderEmail" class="form-input" placeholder="your@qq.com">
+                    </div>
+                    <div class="form-group">
+                        <label>授权码</label>
+                        <input type="password" id="senderPassword" class="form-input" placeholder="SMTP 授权码">
+                    </div>
+                    <div class="form-group">
+                        <label>收件人邮箱</label>
+                        <input type="email" id="receiverEmail" class="form-input" placeholder="receiver@qq.com">
+                    </div>
+                    <div class="info-banner">
+                        💡 提示：授权码不是邮箱密码，需在邮箱设置中开启 SMTP 服务并获取授权码。
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" onclick="closeModal('emailModal')">取消</button>
+                    <button class="btn btn-primary" onclick="saveEmailConfig()">保存配置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 公告详情弹窗 ===== -->
+        <div class="modal-overlay" id="detailModal" onclick="closeModalOnOverlay(event, 'detailModal')">
+            <div class="modal modal-lg">
+                <div class="modal-header">
+                    <h2 id="detailTitle">公告详情</h2>
+                    <button class="modal-close" onclick="closeModal('detailModal')">&times;</button>
+                </div>
+                <div class="modal-body" id="detailBody"></div>
+            </div>
+        </div>
+
+        <!-- ===== Toast 通知 ===== -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
