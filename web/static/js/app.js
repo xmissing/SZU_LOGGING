@@ -71,12 +71,15 @@ async function loadConfig() {
         // 填充数据库弹窗
         document.getElementById("dbEnabled").checked = config.mysql_enabled;
         document.getElementById("dbHost").value = config.mysql_host || "localhost";
+        document.getElementById("dbPort").value = config.mysql_port || 3306;
         document.getElementById("dbUser").value = config.mysql_user || "root";
+        document.getElementById("dbPassword").value = config.mysql_password || "";
         document.getElementById("dbName").value = config.mysql_database || "szu_board";
 
         // 填充邮箱弹窗
         document.getElementById("emailEnabled").checked = config.email_enabled;
         document.getElementById("senderEmail").value = config.sender_email || "";
+        document.getElementById("senderPassword").value = config.sender_password || "";
         document.getElementById("receiverEmail").value = config.receiver_email || "";
 
         // 根据邮箱启用状态控制下拉
@@ -158,6 +161,7 @@ async function saveDbConfig() {
     const data = {
         mysql_enabled: document.getElementById("dbEnabled").checked,
         mysql_host: document.getElementById("dbHost").value.trim(),
+        mysql_port: parseInt(document.getElementById("dbPort").value) || 3306,
         mysql_user: document.getElementById("dbUser").value.trim(),
         mysql_password: document.getElementById("dbPassword").value.trim(),
         mysql_database: document.getElementById("dbName").value.trim(),
@@ -171,6 +175,36 @@ async function saveDbConfig() {
         closeModal("dbModal");
     } catch (e) {
         showToast("保存失败：" + e.message, "error");
+    }
+}
+
+async function testDbConnection() {
+    const data = {
+        host: document.getElementById("dbHost").value.trim() || "localhost",
+        port: parseInt(document.getElementById("dbPort").value) || 3306,
+        user: document.getElementById("dbUser").value.trim() || "root",
+        password: document.getElementById("dbPassword").value.trim(),
+        database: document.getElementById("dbName").value.trim() || "szu_board",
+    };
+    const btn = document.getElementById("testDbBtn");
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "测试中...";
+    try {
+        const resp = await api("/api/database/test", {
+            method: "POST",
+            body: JSON.stringify(data),
+        });
+        if (resp.ok) {
+            showToast("✅ 数据库连接成功", "success");
+        } else {
+            showToast("❌ 连接失败：" + resp.error, "error");
+        }
+    } catch (e) {
+        showToast("❌ 连接失败：" + e.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
     }
 }
 
