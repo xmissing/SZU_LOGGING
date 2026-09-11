@@ -99,6 +99,8 @@ def save_config():
         Config.MYSQL_ENABLED = bool(data["mysql_enabled"])
     if "mysql_host" in data:
         Config.MYSQL_HOST = data["mysql_host"]
+    if "mysql_port" in data:
+        Config.MYSQL_PORT = int(data["mysql_port"])
     if "mysql_user" in data:
         Config.MYSQL_USER = data["mysql_user"]
     if "mysql_password" in data:
@@ -118,6 +120,37 @@ def save_config():
 
     Config.save_settings()
     return jsonify({"ok": True, "config": Config.to_dict()})
+
+
+@app.route("/api/database/test", methods=["POST"])
+def test_db_connection():
+    """测试数据库连接，返回详细错误信息。"""
+    data = request.json
+    host = data.get("host", "localhost")
+    port = int(data.get("port", 3306))
+    user = data.get("user", "root")
+    password = data.get("password", "")
+    database = data.get("database", "szu_board")
+
+    import pymysql
+    try:
+        conn = pymysql.connect(
+            host=host, port=port, user=user,
+            password=password, charset="utf8mb4",
+        )
+        cursor = conn.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database} "
+                       f"DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        conn.close()
+
+        conn = pymysql.connect(
+            host=host, port=port, user=user,
+            password=password, database=database, charset="utf8mb4",
+        )
+        conn.close()
+        return jsonify({"ok": True, "message": "连接成功"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
 
 
 @app.route("/api/crawler/run", methods=["POST"])
