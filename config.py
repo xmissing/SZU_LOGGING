@@ -54,25 +54,30 @@ class Config:
     # ---- 文件路径 ----
     BASE_DIR = Path(__file__).resolve().parent
     COOKIES_FILE = str(Path(tempfile.gettempdir()) / "szu_cookies.json")
-    SETTINGS_FILE = str(BASE_DIR / "settings.json")
+    SETTINGS_FILE = str(Path.home() / ".szu_board_monitor" / "settings.json")
 
     @classmethod
     def save_settings(cls):
-        """将非敏感配置持久化到 settings.json。"""
+        """将配置持久化到 settings.json。"""
         data = {
             "account": cls.ACCOUNT,
             "keyword": cls.QUOTES,
             "time_range": cls.TIME_RANGE,
             "mysql_enabled": cls.MYSQL_ENABLED,
             "mysql_host": cls.MYSQL_HOST,
+            "mysql_port": cls.MYSQL_PORT,
             "mysql_user": cls.MYSQL_USER,
+            "mysql_password": cls.MYSQL_PASSWORD,
             "mysql_database": cls.MYSQL_DATABASE,
             "email_enabled": cls.EMAIL_ENABLED,
             "sender_email": cls.SENDER_EMAIL,
+            "sender_password": cls.SENDER_PASSWORD,
             "receiver_email": cls.RECEIVER_EMAIL,
             "email_send_mode": cls.EMAIL_SEND_MODE,
         }
         try:
+            settings_dir = Path(cls.SETTINGS_FILE).parent
+            settings_dir.mkdir(parents=True, exist_ok=True)
             with open(cls.SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception:
@@ -91,10 +96,13 @@ class Config:
             cls.TIME_RANGE = data.get("time_range", "30#1个月内")
             cls.MYSQL_ENABLED = data.get("mysql_enabled", False)
             cls.MYSQL_HOST = data.get("mysql_host", "localhost")
+            cls.MYSQL_PORT = data.get("mysql_port", 3306)
             cls.MYSQL_USER = data.get("mysql_user", "root")
+            cls.MYSQL_PASSWORD = data.get("mysql_password", "")
             cls.MYSQL_DATABASE = data.get("mysql_database", "szu_board")
             cls.EMAIL_ENABLED = data.get("email_enabled", False)
             cls.SENDER_EMAIL = data.get("sender_email", "")
+            cls.SENDER_PASSWORD = data.get("sender_password", "")
             cls.RECEIVER_EMAIL = data.get("receiver_email", "")
             cls.EMAIL_SEND_MODE = data.get("email_send_mode", "new_only")
         except Exception:
@@ -110,10 +118,13 @@ class Config:
             "time_ranges": TIME_RANGES,
             "mysql_enabled": cls.MYSQL_ENABLED,
             "mysql_host": cls.MYSQL_HOST,
+            "mysql_port": cls.MYSQL_PORT,
             "mysql_user": cls.MYSQL_USER,
+            "mysql_password": cls.MYSQL_PASSWORD,
             "mysql_database": cls.MYSQL_DATABASE,
             "email_enabled": cls.EMAIL_ENABLED,
             "sender_email": cls.SENDER_EMAIL,
+            "sender_password": cls.SENDER_PASSWORD,
             "receiver_email": cls.RECEIVER_EMAIL,
             "email_send_mode": cls.EMAIL_SEND_MODE,
             "email_send_modes": EMAIL_SEND_MODES,
