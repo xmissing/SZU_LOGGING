@@ -241,6 +241,43 @@ def get_detail():
     return jsonify({"ok": False, "error": "未找到该公告"}), 404
 
 
+@app.route("/api/proxy/view", methods=["GET"])
+def proxy_view():
+    """用爬虫已有的 Cookie 代理访问公告原文页面，避免浏览器跳转认证。"""
+    import requests as req
+    import json, time, os
+
+    announcement_id = request.args.get("id", "")
+    if not announcement_id:
+        return jsonify({"ok": False, "error": "缺少公告 ID"}), 400
+
+    # 从 Cookie 文件加载
+    cookies_file = Config.COOKIES_FILE
+    if not os.path.exists(cookies_file):
+        return jsonify({"ok": False, "error": "Cookie 不存在，请先运行爬虫"}), 400
+
+    try:
+        with open(cookies_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if time.time() - data.get("timestamp", 0) > 12 * 3600:
+            return jsonify({"ok": False, "error": "Cookie 已过期，请重新运行爬虫"}), 400
+        cookies = data["cookies"]
+    except Exception:
+        return jsonify({"ok": False, "error": "Cookie 读取失败"}), 500
+
+    url = f"https://www1.szu.edu.cn/board/view.asp?id={announcement_id}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www1.szu.edu.cn/board/",
+    }
+    try:
+        r = req.get(url, headers=headers, cookies=cookies, timeout=15)
+        r.encoding = "gbk"
+        return r.text, 200, {"Content-Type": "text/html; charset=gbk"}
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/email/send", methods=["POST"])
 def send_email():
     """手动触发邮件发送（使用上次抓取结果）。"""
