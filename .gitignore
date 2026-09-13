@@ -21,6 +21,7 @@ settings.json
 szu_cookies.json
 chrome_data/
 pylibs/
+_pydeps/
 
 # OS
 Thumbs.db

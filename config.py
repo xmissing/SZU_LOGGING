@@ -1,6 +1,7 @@
 """全局配置类，集中管理所有可调参数。"""
 
 import os
+import sys
 import json
 import tempfile
 from pathlib import Path
@@ -54,6 +55,9 @@ class Config:
     # ---- 文件路径 ----
     BASE_DIR = Path(__file__).resolve().parent
     COOKIES_FILE = str(Path(tempfile.gettempdir()) / "szu_cookies.json")
+    # exe 同目录的 config.json（用户手动配置），优先级最高
+    _exe_dir = Path(sys.executable).parent if getattr(sys, 'frozen', False) else BASE_DIR
+    LOCAL_CONFIG_FILE = str(_exe_dir / "config.json")
     SETTINGS_FILE = str(Path.home() / ".szu_board_monitor" / "settings.json")
 
     @classmethod
@@ -85,11 +89,16 @@ class Config:
 
     @classmethod
     def load_settings(cls):
-        """从 settings.json 读取上次保存的配置。"""
-        if not os.path.exists(cls.SETTINGS_FILE):
+        """读取配置：优先 exe 同目录 config.json，其次用户主目录 settings.json。"""
+        config_path = None
+        if os.path.exists(cls.LOCAL_CONFIG_FILE):
+            config_path = cls.LOCAL_CONFIG_FILE
+        elif os.path.exists(cls.SETTINGS_FILE):
+            config_path = cls.SETTINGS_FILE
+        else:
             return
         try:
-            with open(cls.SETTINGS_FILE, "r", encoding="utf-8") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             cls.ACCOUNT = data.get("account", "")
             cls.QUOTES = data.get("keyword", "")

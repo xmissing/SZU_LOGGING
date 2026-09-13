@@ -68,11 +68,13 @@ class SzuCrawler:
             return cookies
 
         self.log("正在登录...")
+        import random
+        port = random.randint(9400, 9900)
         co = ChromiumOptions()
         co.set_browser_path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
-        co.set_user_data_path(str(Path(tempfile.gettempdir()) / "szu_chrome_data"))
-        co.set_local_port(9333)
-        co.headless(True)
+        co.set_user_data_path(str(Path(tempfile.gettempdir()) / f"szu_chrome_{port}"))
+        co.set_local_port(port)
+        co.headless()
         co.set_argument("--no-sandbox")
         co.set_argument("--disable-gpu")
         page = ChromiumPage(co)
@@ -90,7 +92,10 @@ class SzuCrawler:
             page.get(self.BOARD_URL)
             page.wait(2)
             all_cookies = page.cookies()
-            cookies_dict = {c["name"]: c["value"] for c in all_cookies}
+            cookies_dict = {}
+            for c in all_cookies:
+                if isinstance(c, dict):
+                    cookies_dict[c.get("name", "")] = c.get("value", "")
             self.save_cookies(cookies_dict)
             return cookies_dict
         except Exception as e:
@@ -114,7 +119,7 @@ class SzuCrawler:
 
         页面结构：
           <font color="#808080">计划财务部　2026/8/31 10:34:00</font>
-          <font color="#F8F8F8">（殷焕杰2025352035 2026/9/8 23:31:51浏览）</font>
+          <font color="#F8F8F8">（张三2026000000 2026/9/8 23:31:51浏览）</font>
         发文学院和发文时间在同一个灰色 font 里，用全角空格分隔。
         浏览量在接近白色的 font 里，格式如 "xxx浏览"。
         """
@@ -196,24 +201,38 @@ class SzuCrawler:
         cookies = self.get_cookies()
         if not cookies or not self.verify_cookies(cookies):
             self.log("Cookie 失效，重新获取...")
+            # 删除旧 Cookie 文件，强制重新登录
+            if os.path.exists(self.config.COOKIES_FILE):
+                os.remove(self.config.COOKIES_FILE)
             cookies = self.get_cookies()
             if not cookies:
                 self.log("获取 Cookie 失败")
                 return []
+            # 再次验证
+            if not self.verify_cookies(cookies):
+                self.log("登录后 Cookie 仍然无效，可能是账号密码错误或网络问题")
+                return []
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": self.BOARD_URL,
         }
-        dayy_gbk = quote(self.config.TIME_RANGE, encoding="gbk")
-        search_type_gbk = quote("标题", encoding="gbk")
-        keyword_gbk = quote(self.config.QUOTES, encoding="gbk")
-        url = (
-            f"{self.SEARCH_URL}?dayy={dayy_gbk}&from_username=&search_type={search_type_gbk}"
-            f"&keyword={keyword_gbk}&searchb1=%CB%D1%CB%F7"
-        )
 
         session = requests.Session()
-        response = session.post(url, headers=headers, cookies=cookies)
+        # 手动用 GBK 编码表单数据
+        post_data = {
+            "dayy": self.config.TIME_RANGE.encode("gbk"),
+            "from_username": b"",
+            "search_type": "标题".encode("gbk"),
+            "keyword": self.config.QUOTES.encode("gbk"),
+            "searchb1": "搜索".encode("gbk"),
+        }
+        response = session.post(
+            self.SEARCH_URL,
+            headers=headers,
+            cookies=cookies,
+            data=post_data,
+        )
         response.encoding = "gbk"
         if response.status_code != 200:
             self.log(f"请求失败：{response.status_code}")
@@ -222,6 +241,11 @@ class SzuCrawler:
         tree = etree.HTML(response.text)
         ids = tree.xpath('//tr/td[@align="left"]/a/@href')
         titles = tree.xpath('//tr/td[@align="left"]/a/text()')
+
+        # 调试：如果没有结果，打印页面部分内容帮助排查
+        if not ids:
+            self.log(f"搜索结果为空，页面长度: {len(response.text)}")
+            self.log(f"URL: {response.url}")
 
         self.log(f"找到 {len(ids)} 条公告")
 

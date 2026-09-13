@@ -18,7 +18,7 @@ class EmailNotifier:
             self.callback(message)
 
     def send(self, subject, body):
-        """发送一封纯文本邮件，成功返回 True。"""
+        """发送一封 HTML 邮件，成功返回 True。"""
         if not self.config.EMAIL_ENABLED:
             return False
         try:
@@ -26,7 +26,7 @@ class EmailNotifier:
             msg["From"] = Header(self.config.SENDER_EMAIL)
             msg["To"] = Header(self.config.RECEIVER_EMAIL)
             msg["Subject"] = Header(subject, "utf-8")
-            msg.attach(MIMEText(body, "plain", "utf-8"))
+            msg.attach(MIMEText(body, "html", "utf-8"))
 
             with smtplib.SMTP_SSL(
                 self.config.SMTP_SERVER, self.config.SMTP_PORT
@@ -72,15 +72,36 @@ class EmailNotifier:
             self.log(f"已发送邮件：{len(all_data)} 条公告")
 
     def _build_email_body(self, data_list, label):
-        """构造邮件正文。"""
+        """构造邮件正文（HTML 格式，包含公告内容）。"""
         new_count = sum(1 for d in data_list if d.get("is_new"))
         old_count = len(data_list) - new_count
 
-        body = f"关键词「{self.config.QUOTES}」{label}\n"
-        body += f"共 {len(data_list)} 条（新数据 {new_count} 条，已存在 {old_count} 条）\n\n"
-
+        rows = []
         for i, item in enumerate(data_list, 1):
-            tag = "[新]" if item.get("is_new") else "[旧]"
-            body += f"{i}. {tag} {item['title']}\n   {item['url']}\n\n"
+            tag = '<span style="color:#e74c3c;font-weight:bold">[新]</span>' if item.get("is_new") else '<span style="color:#3498db;font-weight:bold">[旧]</span>'
+            title = item.get("title", "")
+            author = item.get("author", "")
+            pub_time = item.get("publish_time", "")
+            url = item.get("url", "")
+            content = item.get("content", "") or "暂无内容"
 
-        return body
+            rows.append(f"""
+            <tr>
+                <td style="padding:12px;border-bottom:1px solid #eee;">
+                    <p style="margin:0 0 8px 0;">{tag} <strong>{i}. {title}</strong></p>
+                    <p style="margin:0 0 4px 0;color:#666;font-size:13px;">发布人：{author}　|　发布时间：{pub_time}</p>
+                    <div style="margin:8px 0;padding:10px;background:#f9f9f9;border-radius:4px;font-size:14px;line-height:1.6;">{content}</div>
+                    <a href="{url}" style="color:#3498db;font-size:13px;">查看原文</a>
+                </td>
+            </tr>""")
+
+        html = f"""<html><body>
+        <div style="max-width:800px;margin:0 auto;font-family:'Microsoft YaHei',sans-serif;">
+        <h2 style="color:#333;">关键词「{self.config.QUOTES}」{label}</h2>
+        <p style="color:#666;">共 {len(data_list)} 条（新数据 {new_count} 条，已存在 {old_count} 条）</p>
+        <table style="width:100%;border-collapse:collapse;">{''.join(rows)}
+        </table>
+        </div>
+        </body></html>"""
+
+        return html
