@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Virtual env
+venv/
+env/
+.venv/
+python/
+
+# IDE
+.vscode/
+.idea/
+
+# Project temp files
+settings.json
+szu_cookies.json
+chrome_data/
+pylibs/
+_pydeps/
+config.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# GUI module (legacy)
+gui/

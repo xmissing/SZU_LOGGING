@@ -1,0 +1,22 @@
+{
+  "account": "在此填写深大学号",
+  "password": "在此填写深大统一认证密码",
+  "keyword": "在此填写搜索关键词",
+  "time_range": "30#1个月内",
+  "mysql_enabled": false,
+  "mysql_host": "localhost",
+  "mysql_port": 3306,
+  "mysql_user": "root",
+  "mysql_password": "",
+  "mysql_database": "szu_board",
+  "email_enabled": false,
+  "sender_email": "",
+  "sender_password": "",
+  "receiver_email": "",
+  "email_send_mode": "new_only",
+  "scheduler_enabled": false,
+  "scheduler_time": "08:00",
+  "scheduler_keyword": "",
+  "scheduler_time_range": "30#1个月内",
+  "scheduler_email_mode": "new_only"
+}
