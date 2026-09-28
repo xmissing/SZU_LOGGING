@@ -1,6 +1,8 @@
 // ==================== 全局状态 ====================
 let currentTab = "all";
+let dateFilter = "all"; // all | today | week | month
 let crawlerResults = [];
+let mysqlEnabled = false;
 let pollTimer = null;
 let schedulerPollTimer = null;
 
@@ -70,8 +72,11 @@ async function loadConfig() {
             modeSelect.appendChild(opt);
         });
 
+        // 记录数据库状态，后续用于优先查询数据库
+        mysqlEnabled = Boolean(config.mysql_enabled);
+
         // 填充数据库弹窗
-        document.getElementById("dbEnabled").checked = config.mysql_enabled;
+        document.getElementById("dbEnabled").checked = mysqlEnabled;
         document.getElementById("dbHost").value = config.mysql_host || "localhost";
         document.getElementById("dbPort").value = config.mysql_port || 3306;
         document.getElementById("dbUser").value = config.mysql_user || "root";
@@ -147,6 +152,51 @@ function openEmailModal() {
     updateEmailModeSelect();
 }
 
+function openSchedulerModal() {
+    openModal("schedulerModal");
+    loadSchedulerConfig();
+}
+
+function updateSchedulerEmailModeSelect() {
+    const modeSelect = document.getElementById("schedulerEmailMode");
+    const enabled = document.getElementById("emailEnabled").checked;
+    const senderEmail = document.getElementById("senderEmail").value.trim();
+    const senderPassword = document.getElementById("senderPassword").value.trim();
+    const receiverEmail = document.getElementById("receiverEmail").value.trim();
+
+    const hasEmailConfig = enabled && senderEmail && senderPassword && receiverEmail;
+
+    if (!hasEmailConfig) {
+        modeSelect.disabled = true;
+        modeSelect.innerHTML = "";
+        const opt = document.createElement("option");
+        opt.value = "none";
+        opt.textContent = "请先在邮箱配置中填写邮箱信息";
+        modeSelect.appendChild(opt);
+    } else {
+        modeSelect.disabled = false;
+        const currentVal = modeSelect.value;
+        modeSelect.innerHTML = "";
+        const modes = { "none": "不发送", "new_only": "仅发送新数据", "all": "发送全部数据" };
+        Object.entries(modes).forEach(([key, label]) => {
+            const opt = document.createElement("option");
+            opt.value = key;
+            opt.textContent = label;
+            if (key === currentVal) opt.selected = true;
+            modeSelect.appendChild(opt);
+        });
+    }
+}
+
+async function refreshSchedulerStatus() {
+    try {
+        const data = await api("/api/scheduler");
+        updateSchedulerDisplay(data);
+    } catch (e) {
+        console.error("刷新定时任务状态失败:", e);
+    }
+}
+
 // 邮箱配置输入变化时实时更新邮件模式下拉
 function bindEmailInputListeners() {
     ["emailEnabled", "senderEmail", "senderPassword", "receiverEmail"].forEach(id => {
@@ -173,6 +223,7 @@ async function saveDbConfig() {
             method: "POST",
             body: JSON.stringify(data),
         });
+        mysqlEnabled = data.mysql_enabled;
         showToast("数据库配置已保存", "success");
         closeModal("dbModal");
     } catch (e) {
@@ -230,6 +281,40 @@ async function saveEmailConfig() {
     }
 }
 
+// ==================== 数据库优先查询 ====================
+async function loadDatabaseResults(keyword, timeRange) {
+    if (!mysqlEnabled) return false;
+
+    const params = new URLSearchParams();
+    if (keyword) params.set("keyword", keyword);
+    if (timeRange) params.set("time_range", timeRange);
+
+    const result = await api(`/api/data/search?${params.toString()}`);
+    const rows = (result.data || []).map(item => ({
+        ...item,
+        is_new: false,
+    }));
+
+    if (rows.length > 0) {
+        crawlerResults = rows;
+        renderData();
+        appendLog(`数据库优先查询完成，找到 ${rows.length} 条已存公告`);
+        return true;
+    }
+
+    appendLog("数据库优先查询完成，暂无匹配的已存公告，将继续访问官网抓取");
+    return false;
+}
+
+function appendLog(message) {
+    const consoleEl = document.getElementById("logConsole");
+    if (!consoleEl) return;
+    const div = document.createElement("div");
+    div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString("zh-CN", { hour12: false })}]</span> <span class="log-msg">${escapeHtml(message)}</span>`;
+    consoleEl.appendChild(div);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
 // ==================== 运行爬虫 ====================
 async function runCrawler() {
     const account = document.getElementById("account").value.trim();
@@ -238,8 +323,8 @@ async function runCrawler() {
     const timeRange = document.getElementById("timeRange").value;
     const emailSendMode = document.getElementById("emailSendMode").value;
 
-    if (!account || !password || !keyword) {
-        showToast("账号、密码和关键词为必填项", "error");
+    if (!account || !password) {
+        showToast("账号和密码为必填项", "error");
         return;
     }
 
@@ -252,7 +337,23 @@ async function runCrawler() {
     document.getElementById("logConsole").innerHTML = "";
     setLogStatus("running", "运行中...");
 
-    // 隐藏旧数据
+    // 数据库启用时先查本地，命中后不重复访问官网；未命中才启动爬虫
+    if (mysqlEnabled) {
+        try {
+            const found = await loadDatabaseResults(keyword, timeRange);
+            if (found) {
+                runBtn.disabled = false;
+                runBtn.innerHTML = "🚀 运行爬虫";
+                setLogStatus("success", "数据库查询完成");
+                showToast(`数据库查询完成，共 ${crawlerResults.length} 条公告`, "success");
+                return;
+            }
+        } catch (e) {
+            appendLog(`数据库查询失败，将继续抓取：${e.message}`);
+        }
+    }
+
+    // 隐藏旧数据，准备接收官网抓取结果
     document.getElementById("dataSection").style.display = "none";
 
     try {
@@ -377,7 +478,7 @@ function switchTab(tab) {
     });
     document.querySelector(`.tab[data-tab="${tab}"]`).classList.add("tab-active");
 
-    // 过滤数据
+    // 过滤数据（Tab + 日期筛选）
     let data;
     if (tab === "all") {
         data = crawlerResults;
@@ -385,6 +486,29 @@ function switchTab(tab) {
         data = crawlerResults.filter(d => d.is_new === true);
     } else {
         data = crawlerResults.filter(d => d.is_new === false);
+    }
+
+    // 日期筛选
+    if (dateFilter !== "all") {
+        const now = new Date();
+        data = data.filter(d => {
+            const t = d.publish_time || "";
+            if (!t) return false;
+            const pubDate = new Date(t.replace(/\//g, "-"));
+            if (isNaN(pubDate)) return false;
+            if (dateFilter === "today") {
+                return pubDate.toDateString() === now.toDateString();
+            } else if (dateFilter === "week") {
+                const weekAgo = new Date(now);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return pubDate >= weekAgo;
+            } else if (dateFilter === "month") {
+                const monthAgo = new Date(now);
+                monthAgo.setMonth(monthAgo.getMonth() - 1);
+                return pubDate >= monthAgo;
+            }
+            return true;
+        });
     }
 
     // 渲染表格
@@ -537,6 +661,7 @@ async function saveSchedulerConfig() {
             body: JSON.stringify(data),
         });
         showToast("定时任务配置已保存", "success");
+        closeModal("schedulerModal");
         // 刷新状态
         const status = await api("/api/scheduler");
         updateSchedulerDisplay(status);
@@ -683,4 +808,55 @@ function showToast(message, type = "info") {
         toast.style.transition = "all 0.3s ease";
         setTimeout(() => toast.remove(), 300);
     }, 3500);
+}
+
+// ==================== 日期筛选 ====================
+function filterByDate(filter) {
+    dateFilter = filter;
+
+    // 更新按钮样式
+    const btns = ["filterAllBtn", "filterTodayBtn", "filterWeekBtn", "filterMonthBtn"];
+    const filterMap = { all: "filterAllBtn", today: "filterTodayBtn", week: "filterWeekBtn", month: "filterMonthBtn" };
+    btns.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.className = "btn btn-sm btn-ghost";
+    });
+    const activeBtn = document.getElementById(filterMap[filter] || "filterAllBtn");
+    if (activeBtn) activeBtn.className = "btn btn-sm btn-filter";
+
+    // 更新筛选信息
+    const infoEl = document.getElementById("dateFilterInfo");
+    if (infoEl) {
+        const labels = { all: "", today: "今日", week: "本周", month: "本月" };
+        infoEl.textContent = labels[filter] ? `筛选：${labels[filter]}` : "";
+    }
+
+    // 重新渲染
+    switchTab(currentTab);
+}
+
+// ==================== 打印功能 ====================
+function printCurrentList() {
+    // 获取当前显示的数据条数
+    const rowCount = document.querySelectorAll("#tableBody tr").length;
+    if (rowCount === 0) {
+        showToast("没有可打印的数据", "error");
+        return;
+    }
+
+    // 设置打印标题
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+    let title = "深圳大学公告列表";
+    if (dateFilter === "today") {
+        title = `深圳大学今日公告（${dateStr}）`;
+    } else {
+        title = `深圳大学公告列表（${dateStr}）`;
+    }
+    const tabLabels = { all: "全部", new: "新数据", old: "已存数据" };
+    title += ` - ${tabLabels[currentTab] || ""}（共 ${rowCount} 条）`;
+    document.getElementById("printTitle").textContent = title;
+
+    // 触发打印
+    window.print();
 }

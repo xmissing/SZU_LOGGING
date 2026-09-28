@@ -843,3 +843,58 @@ body {
     .form-group-keyword { max-width: 100%; }
     .modal { width: 95vw; }
 }
+
+/* ==================== 筛选栏 ==================== */
+.filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.filter-left, .filter-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.btn-sm {
+    padding: 6px 14px;
+    font-size: 13px;
+    border-radius: var(--radius-sm);
+}
+.btn-filter {
+    background: var(--primary);
+    color: white;
+    border: 1px solid var(--primary);
+}
+.btn-filter:hover {
+    background: var(--primary-hover);
+}
+.hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+
+/* ==================== 打印样式 ==================== */
+@media print {
+    body { background: white; }
+    .navbar, .search-card, .log-card, .filter-bar, .tabs, .data-summary,
+    .modal-overlay, .detail-modal-footer, th:last-child, td:last-child {
+        display: none !important;
+    }
+    .main-content { padding: 0; }
+    .card { box-shadow: none; border: none; }
+    .data-table { font-size: 12px; }
+    .data-table th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .data-table a { color: #000; text-decoration: none; }
+    h2.print-title {
+        display: block !important;
+        text-align: center;
+        font-size: 18px;
+        margin-bottom: 16px;
+    }
+}
+
+.print-title { display: none; }

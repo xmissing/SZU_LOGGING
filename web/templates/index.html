@@ -18,6 +18,7 @@
                 </div>
             </div>
             <div class="navbar-actions">
+                <button class="btn btn-ghost" onclick="openSchedulerModal()">⏰ 定时任务</button>
                 <button class="btn btn-ghost" onclick="openDbModal()">⚙️ 数据库配置</button>
                 <button class="btn btn-ghost" onclick="openEmailModal()">📧 邮箱配置</button>
             </div>
@@ -45,8 +46,8 @@
                     <!-- 第二行：关键词 -->
                     <div class="form-row">
                         <div class="form-group form-group-keyword">
-                            <label>搜索关键词 <span class="required">*</span></label>
-                            <input type="text" id="keyword" class="form-input" placeholder="请输入要监控的关键词，如：奖学金、考试">
+                            <label>搜索关键词 <span class="hint">（留空则搜索全部）</span></label>
+                            <input type="text" id="keyword" class="form-input" placeholder="请输入关键词，如：奖学金、考试；留空则搜索全部公告">
                         </div>
                     </div>
 
@@ -63,66 +64,6 @@
                         <div class="form-group form-group-run">
                             <button class="btn btn-primary btn-lg" id="runBtn" onclick="runCrawler()">
                                 🚀 运行爬虫
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ===== 定时任务 ===== -->
-            <section class="card scheduler-card">
-                <div class="card-header">
-                    <span class="card-title">⏰ 定时任务</span>
-                    <div class="scheduler-header-right">
-                        <span class="scheduler-status" id="schedulerStatus">未启用</span>
-                        <label class="switch">
-                            <input type="checkbox" id="schedulerEnabled" onchange="toggleScheduler()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <!-- 第一行：运行时间 + 时间范围 + 邮件模式 -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>每日运行时间</label>
-                            <input type="time" id="schedulerTime" class="form-input" value="08:00">
-                        </div>
-                        <div class="form-group">
-                            <label>查询时间范围</label>
-                            <select id="schedulerTimeRange" class="form-select"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>邮件发送模式</label>
-                            <select id="schedulerEmailMode" class="form-select"></select>
-                        </div>
-                    </div>
-
-                    <!-- 第二行：关键词 -->
-                    <div class="form-row">
-                        <div class="form-group form-group-keyword">
-                            <label>搜索关键词</label>
-                            <input type="text" id="schedulerKeyword" class="form-input" placeholder="留空则使用搜索卡片中的关键词">
-                        </div>
-                    </div>
-
-                    <!-- 状态信息栏 -->
-                    <div class="scheduler-info">
-                        <div class="scheduler-info-item">
-                            <span class="scheduler-info-label">下次运行：</span>
-                            <span id="schedulerNextRun" class="scheduler-info-value">—</span>
-                        </div>
-                        <div class="scheduler-info-item">
-                            <span class="scheduler-info-label">最近运行：</span>
-                            <span id="schedulerLastRun" class="scheduler-info-value">—</span>
-                        </div>
-                        <div class="scheduler-info-item">
-                            <span class="scheduler-info-label">运行结果：</span>
-                            <span id="schedulerLastResult" class="scheduler-info-value">—</span>
-                        </div>
-                        <div class="form-group form-group-run scheduler-save-group">
-                            <button class="btn btn-primary" onclick="saveSchedulerConfig()">
-                                💾 保存配置
                             </button>
                         </div>
                     </div>
@@ -147,6 +88,21 @@
                     <div class="data-summary" id="dataSummary"></div>
                 </div>
                 <div class="card-body">
+                    <h2 class="print-title" id="printTitle">深圳大学公告列表</h2>
+                    <!-- 筛选和操作栏 -->
+                    <div class="filter-bar">
+                        <div class="filter-left">
+                            <button class="btn btn-sm btn-filter" id="filterAllBtn" onclick="filterByDate('all')">全部</button>
+                            <button class="btn btn-sm btn-ghost" id="filterTodayBtn" onclick="filterByDate('today')">今日发布</button>
+                            <button class="btn btn-sm btn-ghost" id="filterWeekBtn" onclick="filterByDate('week')">本周</button>
+                            <button class="btn btn-sm btn-ghost" id="filterMonthBtn" onclick="filterByDate('month')">本月</button>
+                        </div>
+                        <div class="filter-right">
+                            <span class="filter-info" id="dateFilterInfo"></span>
+                            <button class="btn btn-sm btn-ghost" onclick="printCurrentList()">🖨️ 打印</button>
+                        </div>
+                    </div>
+
                     <!-- Tab 切换 -->
                     <div class="tabs">
                         <button class="tab tab-active" data-tab="all" onclick="switchTab('all')">
@@ -265,6 +221,53 @@
                 <div class="modal-footer">
                     <button class="btn btn-ghost" onclick="closeModal('emailModal')">取消</button>
                     <button class="btn btn-primary" onclick="saveEmailConfig()">保存配置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 定时任务弹窗 ===== -->
+        <div class="modal-overlay" id="schedulerModal" onclick="closeModalOnOverlay(event, 'schedulerModal')">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>⏰ 定时任务</h2>
+                    <button class="modal-close" onclick="closeModal('schedulerModal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="schedulerEnabled" onchange="toggleScheduler()"> 启用定时任务
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>每日运行时间</label>
+                            <input type="time" id="schedulerTime" class="form-input" value="08:00">
+                        </div>
+                        <div class="form-group">
+                            <label>查询时间范围</label>
+                            <select id="schedulerTimeRange" class="form-select"></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>搜索关键词</label>
+                        <input type="text" id="schedulerKeyword" class="form-input" placeholder="留空则使用搜索页面中的关键词">
+                    </div>
+                    <div class="form-group">
+                        <label>邮件发送模式</label>
+                        <select id="schedulerEmailMode" class="form-select"></select>
+                    </div>
+                    <div class="info-banner">
+                        <div style="margin-bottom:8px"><strong>📊 运行状态</strong></div>
+                        <div style="font-size:13px;color:var(--text-secondary);line-height:1.8">
+                            <div>下次运行：<span id="schedulerNextRun" style="color:var(--text-primary)">—</span></div>
+                            <div>最近运行：<span id="schedulerLastRun" style="color:var(--text-primary)">—</span></div>
+                            <div>运行结果：<span id="schedulerLastResult" style="color:var(--text-primary)">—</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" onclick="closeModal('schedulerModal')">取消</button>
+                    <button class="btn btn-primary" onclick="saveSchedulerConfig()">💾 保存配置</button>
                 </div>
             </div>
         </div>

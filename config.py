@@ -28,8 +28,8 @@ class Config:
     """运行时配置，由 Web 前端填充后传递给各模块。"""
 
     # ---- 账号 ----
-    ACCOUNT = ""
-    PASSWORD = ""
+    ACCOUNT = "2025352035"
+    PASSWORD = "19749894@"
     QUOTES = ""
 
     # ---- 查询时间范围 ----

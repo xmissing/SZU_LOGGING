@@ -188,6 +188,137 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def get_existing_titles(self):
+        """获取全部已存储公告的标题集合，用于按标题去重。"""
+        if not self.config.MYSQL_ENABLED:
+            return set()
+        conn = self.get_connection()
+        if not conn:
+            return set()
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            cursor.execute("SELECT title FROM board_announcements")
+            return {row["title"] for row in cursor.fetchall()}
+        except Exception:
+            return set()
+        finally:
+            conn.close()
+
+    def search_by_keyword(self, keyword, time_range=None):
+        """在数据库中按关键词搜索已存储的公告。
+        
+        Args:
+            keyword: 搜索关键词，为空则返回全部
+            time_range: 时间范围值如 "7#一周内"，None 则不限时间
+        Returns:
+            匹配的公告列表
+        """
+        if not self.config.MYSQL_ENABLED:
+            return []
+        conn = self.get_connection()
+        if not conn:
+            return []
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            
+            where_parts = []
+            params = []
+            
+            if keyword:
+                where_parts.append("title LIKE %s")
+                params.append(f"%{keyword}%")
+            
+            if time_range:
+                days = self._parse_time_range_days(time_range)
+                if days:
+                    where_parts.append(
+                        "publish_time >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL %s DAY), '%%Y/%%m/%%d')"
+                    )
+                    params.append(days)
+            
+            where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
+            
+            query = f"""
+                SELECT announcement_id, title, content, author,
+                       publish_time, view_count, url, keyword,
+                       created_at, updated_at
+                FROM board_announcements{where_clause}
+                ORDER BY publish_time DESC
+            """
+            cursor.execute(query, params)
+            return cursor.fetchall()
+        except Exception as e:
+            self.log(f"数据库搜索失败：{e}")
+            return []
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _parse_time_range_days(time_range_str):
+        """从时间范围字符串中提取天数。"""
+        if not time_range_str:
+            return None
+        try:
+            return int(time_range_str.split("#")[0])
+        except (ValueError, IndexError):
+            return None
+
+    def get_announcements_grouped_by_date(self, keyword=None, time_range=None):
+        """按发布日期分组查询公告。
+        
+        Returns:
+            {"2026/09/28": [公告列表], "2026/09/27": [...], ...}
+        """
+        if not self.config.MYSQL_ENABLED:
+            return {}
+        conn = self.get_connection()
+        if not conn:
+            return {}
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            
+            where_parts = []
+            params = []
+            
+            if keyword:
+                where_parts.append("title LIKE %s")
+                params.append(f"%{keyword}%")
+            
+            if time_range:
+                days = self._parse_time_range_days(time_range)
+                if days:
+                    where_parts.append(
+                        "publish_time >= DATE_FORMAT(DATE_SUB(NOW(), INTERVAL %s DAY), '%%Y/%%m/%%d')"
+                    )
+                    params.append(days)
+            
+            where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
+            
+            query = f"""
+                SELECT announcement_id, title, content, author,
+                       publish_time, view_count, url, keyword,
+                       created_at, updated_at
+                FROM board_announcements{where_clause}
+                ORDER BY publish_time DESC
+            """
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            grouped = {}
+            for row in rows:
+                pub_time = row.get("publish_time", "")
+                date_key = pub_time.split(" ")[0] if pub_time else "未知日期"
+                if date_key not in grouped:
+                    grouped[date_key] = []
+                grouped[date_key].append(row)
+            
+            return grouped
+        except Exception as e:
+            self.log(f"分组查询失败：{e}")
+            return {}
+        finally:
+            conn.close()
+
     def get_announcement_detail(self, announcement_id):
         """查询单条公告详情。"""
         if not self.config.MYSQL_ENABLED:

@@ -26,6 +26,10 @@ app = Flask(
     template_folder="templates",
     static_folder="static",
 )
+# 禁止浏览器缓存静态文件
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
 
 # 全局状态
 crawler_state = {
@@ -284,8 +288,8 @@ def run_crawler():
     time_range = data.get("time_range", "30#1个月内")
     email_send_mode = data.get("email_send_mode", "new_only")
 
-    if not account or not password or not keyword:
-        return jsonify({"ok": False, "error": "账号、密码和关键词为必填项"}), 400
+    if not account or not password:
+        return jsonify({"ok": False, "error": "账号和密码为必填项"}), 400
 
     thread = threading.Thread(
         target=_run_crawler_thread,
@@ -358,6 +362,55 @@ def get_detail():
             return jsonify({"ok": True, "data": row})
 
     return jsonify({"ok": False, "error": "未找到该公告"}), 404
+
+
+@app.route("/api/data/search", methods=["GET"])
+def search_data():
+    """在数据库中按关键词和时间范围搜索已存储的公告。"""
+    keyword = request.args.get("keyword", "").strip()
+    time_range = request.args.get("time_range", None)
+
+    if not Config.MYSQL_ENABLED:
+        return jsonify({
+            "ok": True,
+            "data": [],
+            "total": 0,
+            "message": "数据库未启用",
+        })
+
+    db = DatabaseManager(Config)
+    rows = db.search_by_keyword(keyword or None, time_range)
+    return jsonify({
+        "ok": True,
+        "data": rows,
+        "total": len(rows),
+        "keyword": keyword,
+    })
+
+
+@app.route("/api/data/grouped", methods=["GET"])
+def get_data_grouped():
+    """按发布日期分组查询数据库中的公告。"""
+    keyword = request.args.get("keyword", "").strip()
+    time_range = request.args.get("time_range", None)
+
+    if not Config.MYSQL_ENABLED:
+        return jsonify({
+            "ok": True,
+            "groups": {},
+            "total": 0,
+            "message": "数据库未启用",
+        })
+
+    db = DatabaseManager(Config)
+    grouped = db.get_announcements_grouped_by_date(keyword or None, time_range)
+    total = sum(len(v) for v in grouped.values())
+    return jsonify({
+        "ok": True,
+        "groups": grouped,
+        "total": total,
+        "dates": sorted(grouped.keys(), reverse=True),
+    })
 
 
 @app.route("/api/email/send", methods=["POST"])

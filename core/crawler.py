@@ -116,10 +116,16 @@ class SzuCrawler:
             page.wait(3)
             self.log(f"  公告板URL: {page.url}")
             self.log("  获取Cookie...")
-            all_cookies = page.cookies(as_dict=True)
-            self.save_cookies(all_cookies)
+            all_cookies = page.cookies(all_domains=True)
+            cookies_dict = {}
+            for c in all_cookies:
+                if isinstance(c, dict):
+                    cookies_dict[c.get("name", "")] = c.get("value", "")
+                elif isinstance(c, (list, tuple)) and len(c) >= 2:
+                    cookies_dict[c[0]] = c[1]
+            self.save_cookies(cookies_dict)
             self.log("  Cookie保存完成")
-            return all_cookies
+            return cookies_dict
         except Exception as e:
             import traceback
             self.log(f"登录失败：{e}")
@@ -227,19 +233,12 @@ class SzuCrawler:
                 self.config.MYSQL_ENABLED = False
 
         cookies = self.get_cookies()
-        if not cookies or not self.verify_cookies(cookies):
-            self.log("Cookie 失效，重新获取...")
-            # 删除旧 Cookie 文件，强制重新登录
-            if os.path.exists(self.config.COOKIES_FILE):
-                os.remove(self.config.COOKIES_FILE)
-            cookies = self.get_cookies()
-            if not cookies:
-                self.log("获取 Cookie 失败")
-                return []
-            # 再次验证
-            if not self.verify_cookies(cookies):
-                self.log("登录后 Cookie 仍然无效，可能是账号密码错误或网络问题")
-                return []
+        if not cookies:
+            self.log("获取 Cookie 失败")
+            return []
+        if not self.verify_cookies(cookies):
+            self.log("登录后 Cookie 仍然无效，可能是账号密码错误或网络问题")
+            return []
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -277,10 +276,13 @@ class SzuCrawler:
 
         self.log(f"找到 {len(ids)} 条公告")
 
-        # 预取已存 ID 集合，减少逐条查询
+        # 预取已存 ID 集合和标题集合，减少逐条查询
         existing_ids = set()
+        existing_titles = set()
         if self.config.MYSQL_ENABLED:
             existing_ids = set(self.db.get_all_announcements())
+            existing_titles = self.db.get_existing_titles()
+            self.log(f"  数据库已有 {len(existing_ids)} 条，{len(existing_titles)} 个标题")
 
         all_data = []
         new_data = []
@@ -295,14 +297,19 @@ class SzuCrawler:
                 data["title"] = title
 
             if self.config.MYSQL_ENABLED:
-                is_new = announcement_id not in existing_ids
+                is_new_id = announcement_id not in existing_ids
+                is_new_title = data["title"] not in existing_titles
+                is_new = is_new_id and is_new_title
+                
                 data["is_new"] = is_new
                 if is_new:
                     self.db.save_announcement(data)
+                    existing_ids.add(announcement_id)
+                    existing_titles.add(data["title"])
                     new_data.append(data)
                     self.log(f"    新增：{data['title'][:30]}...")
                 else:
-                    self.log(f"    已存在：{data['title'][:30]}...")
+                    self.log(f"    跳过（已存在）：{data['title'][:30]}...")
             else:
                 data["is_new"] = None
                 self.log(f"    已抓取：{data['title'][:30]}...")
